@@ -1,5 +1,6 @@
 import {map} from 'zrender/src/core/util';
 import createRenderPlanner from '../chart/helper/createRenderPlanner';
+import {isDimensionStacked} from '../data/helper/dataStackHelper';
 
 export default function (seriesType) {
     return {
@@ -18,9 +19,16 @@ export default function (seriesType) {
             }
 
             var dims = map(coordSys.dimensions, function (dim) {
-                return data.getDimension(data.mapDimension(dim));
+                return data.mapDimension(dim);
             }).slice(0, 2);
             var dimLen = dims.length;
+
+            if (isDimensionStacked(data, dims[0], dims[1])) {
+                dims[0] = data.getCalculationInfo('stackResultDimension');
+            }
+            if (isDimensionStacked(data, dims[1], dims[0])) {
+                dims[1] = data.getCalculationInfo('stackResultDimension');
+            }
 
             function progress(params, data) {
                 var segCount = params.end - params.start;
@@ -30,12 +38,12 @@ export default function (seriesType) {
                     var point;
 
                     if (dimLen === 1) {
-                        var x = data.get(dims[0], i, true);
+                        var x = data.get(dims[0], i);
                         point = !isNaN(x) && coordSys.dataToPoint(x, null, tmpOut);
                     }
                     else {
-                        var x = tmpIn[0] = data.get(dims[0], i, true);
-                        var y = tmpIn[1] = data.get(dims[1], i, true);
+                        var x = tmpIn[0] = data.get(dims[0], i);
+                        var y = tmpIn[1] = data.get(dims[1], i);
                         // Also {Array.<number>}, not undefined to avoid if...else... statement
                         point = !isNaN(x) && !isNaN(y) && coordSys.dataToPoint(tmpIn, null, tmpOut);
                     }

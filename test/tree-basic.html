@@ -47,6 +47,7 @@
                             series:[
                                 {
                                     type: 'tree',
+                                    id: 'a',
 
                                     data: [data],
 
@@ -56,22 +57,19 @@
                                     right: '20%',
 
                                     symbolSize: 7,
+
                                     // initialTreeDepth: -1,
                                     label: {
-                                        normal: {
                                             position: 'left',
                                             verticalAlign: 'middle',
                                             align: 'right'
-                                        }
                                     },
 
                                     leaves: {
                                         label: {
-                                            normal: {
                                                 position: 'right',
                                                 verticalAlign: 'middle',
                                                 align: 'left'
-                                            }
                                         }
                                     },
 
@@ -81,6 +79,20 @@
                                 }
                             ]
                         });
+
+
+                        setTimeout(function () {
+                            var newData = echarts.util.clone(data);
+                            newData.children.splice(0, 1);
+
+                            chart.setOption({
+                                series: {
+                                    id: 'a',
+                                    data: [newData]
+                                }
+                            });
+                        }, 1000);
+
                     });
                 });
         </script>

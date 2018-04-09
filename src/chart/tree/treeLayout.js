@@ -11,7 +11,13 @@ import {
     getViewRect
 } from './layoutHelper';
 
-export default function (seriesModel, api) {
+export default function (ecModel, api) {
+    ecModel.eachSeriesByType('tree', function (seriesModel) {
+        commonLayout(seriesModel, api);
+    });
+}
+
+function commonLayout(seriesModel, api) {
 
     var layoutInfo = getViewRect(seriesModel, api);
     seriesModel.layoutInfo = layoutInfo;
@@ -35,6 +41,7 @@ export default function (seriesModel, api) {
 
     var virtualRoot = seriesModel.getData().tree.root;
     var realRoot = virtualRoot.children[0];
+
     init(virtualRoot);
     eachAfter(realRoot, firstWalk, separation);
     virtualRoot.hierNode.modifier = - realRoot.hierNode.prelim;
@@ -65,7 +72,7 @@ export default function (seriesModel, api) {
     if (layout === 'radial') {
         kx = width / (right.getLayout().x + delta + tx);
         // here we use (node.depth - 1), bucause the real root's depth is 1
-        ky = height/ ((bottom.depth - 1) || 1);
+        ky = height / ((bottom.depth - 1) || 1);
         eachBefore(realRoot, function (node) {
             coorX = (node.getLayout().x + tx) * kx;
             coorY = (node.depth - 1) * ky;
@@ -74,21 +81,26 @@ export default function (seriesModel, api) {
         });
     }
     else {
-        if (seriesModel.get('orient') === 'horizontal') {
+        var orient = seriesModel.getOrient(); 
+        if (orient === 'RL' || orient === 'LR') {
             ky = height / (right.getLayout().x + delta + tx);
             kx = width / ((bottom.depth - 1) || 1);
             eachBefore(realRoot, function (node) {
                 coorY = (node.getLayout().x + tx) * ky;
-                coorX = (node.depth - 1) * kx;
+                coorX = orient === 'LR'
+                    ? (node.depth - 1) * kx
+                    : width - (node.depth - 1) * kx;
                 node.setLayout({x: coorX, y: coorY}, true);
             });
         }
-        else {
+        else if (orient === 'TB' || orient === 'BT') {
             kx = width / (right.getLayout().x + delta + tx);
             ky = height / ((bottom.depth - 1) || 1);
             eachBefore(realRoot, function (node) {
                 coorX = (node.getLayout().x + tx) * kx;
-                coorY = (node.depth - 1) * ky;
+                coorY = orient === 'TB'
+                    ? (node.depth - 1) * ky
+                    : height - (node.depth - 1) * ky;
                 node.setLayout({x: coorX, y: coorY}, true);
             });
         }

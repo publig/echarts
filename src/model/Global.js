@@ -41,8 +41,6 @@ var OPTION_INNER_KEY = '\0_ec_inner';
  */
 var GlobalModel = Model.extend({
 
-    constructor: GlobalModel,
-
     init: function (option, parentModel, theme, optionManager) {
         theme = theme || {};
 
@@ -473,6 +471,9 @@ var GlobalModel = Model.extend({
     },
 
     /**
+     * Get series list before filtered by type.
+     * FIXME: rename to getRawSeriesByType?
+     *
      * @param {string} subType
      * @return {Array.<module:echarts/model/Series>}
      */
@@ -617,7 +618,14 @@ function isNotTargetSeries(seriesModel, payload) {
  * @inner
  */
 function mergeTheme(option, theme) {
+    // PENDING
+    // NOT use `colorLayer` in theme if option has `color`
+    var notMergeColorLayer = option.color && !option.colorLayer;
+
     each(theme, function (themeItem, name) {
+        if (name === 'colorLayer' && notMergeColorLayer) {
+            return;
+        }
         // 如果有 component model 则把具体的 merge 逻辑交给该 model 处理
         if (!ComponentModel.hasClass(name)) {
             if (typeof themeItem === 'object') {

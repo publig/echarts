@@ -12,12 +12,18 @@ import {normalizeToArray} from '../util/model';
 /**
  * @constructor
  */
-function Scheduler(ecInstance, api) {
-    // this._pipelineMap = createHashMap();
-
+function Scheduler(ecInstance, api, dataProcessorHandlers, visualHandlers) {
     this.ecInstance = ecInstance;
     this.api = api;
     this.unfinished;
+
+    // Fix current processors in case that in some rear cases that
+    // processors might be registered after echarts instance created.
+    // Register processors incrementally for a echarts instance is
+    // not supported by this stream architecture.
+    var dataProcessorHandlers = this._dataProcessorHandlers = dataProcessorHandlers.slice();
+    var visualHandlers = this._visualHandlers = visualHandlers.slice();
+    this._allHandlers = dataProcessorHandlers.concat(visualHandlers);
 
     /**
      * @private
@@ -35,6 +41,44 @@ function Scheduler(ecInstance, api) {
 
 var proto = Scheduler.prototype;
 
+/**
+ * @param {module:echarts/model/Global} ecModel
+ * @param {Object} payload
+ */
+proto.restoreData = function (ecModel, payload) {
+    // TODO: Only restroe needed series and components, but not all components.
+    // Currently `restoreData` of all of the series and component will be called.
+    // But some independent components like `title`, `legend`, `graphic`, `toolbox`,
+    // `tooltip`, `axisPointer`, etc, do not need series refresh when `setOption`,
+    // and some components like coordinate system, axes, dataZoom, visualMap only
+    // need their target series refresh.
+    // (1) If we are implementing this feature some day, we should consider these cases:
+    // if a data processor depends on a component (e.g., dataZoomProcessor depends
+    // on the settings of `dataZoom`), it should be re-performed if the component
+    // is modified by `setOption`.
+    // (2) If a processor depends on sevral series, speicified by its `getTargetSeries`,
+    // it should be re-performed when the result array of `getTargetSeries` changed.
+    // We use `dependencies` to cover these issues.
+    // (3) How to update target series when coordinate system related components modified.
+
+    // TODO: simply the dirty mechanism? Check whether only the case here can set tasks dirty,
+    // and this case all of the tasks will be set as dirty.
+
+    ecModel.restoreData(payload);
+
+    // Theoretically an overall task not only depends on each of its target series, but also
+    // depends on all of the series.
+    // The overall task is not in pipeline, and `ecModel.restoreData` only set pipeline tasks
+    // dirty. If `getTargetSeries` of an overall task returns nothing, we should also ensure
+    // that the overall task is set as dirty and to be performed, otherwise it probably cause
+    // state chaos. So we have to set dirty of all of the overall tasks manually, otherwise it
+    // probably cause state chaos (consider `dataZoomProcessor`).
+    this._stageTaskMap.each(function (taskRecord) {
+        var overallTask = taskRecord.overallTask;
+        overallTask && overallTask.dirty();
+    });
+};
+
 // If seriesModel provided, incremental threshold is check by series data.
 proto.getPerformArgs = function (task, isBlock) {
     // For overall task
@@ -46,7 +90,7 @@ proto.getPerformArgs = function (task, isBlock) {
     var pCtx = pipeline.context;
     var incremental = !isBlock
         && pipeline.progressiveEnabled
-        && (!pCtx || pCtx.incrementalRender)
+        && (!pCtx || pCtx.progressiveRender)
         && task.__idxInPipeline > pipeline.bockIndex;
 
     return {step: incremental ? pipeline.step : null};
@@ -67,13 +111,20 @@ proto.updateStreamModes = function (seriesModel, view) {
     var pipeline = this._pipelineMap.get(seriesModel.uid);
     var data = seriesModel.getData();
     var dataLen = data.count();
-    var incrementalRender = pipeline.progressiveEnabled
+
+    // `progressiveRender` means that can render progressively in each
+    // animation frame. Note that some types of series do not provide
+    // `view.incrementalPrepareRender` but support `chart.appendData`. We
+    // use the term `incremental` but not `progressive` to describe the
+    // case that `chart.appendData`.
+    var progressiveRender = pipeline.progressiveEnabled
         && view.incrementalPrepareRender
         && dataLen >= pipeline.threshold;
+
     var large = seriesModel.get('large') && dataLen >= seriesModel.get('largeThreshold');
 
     seriesModel.pipelineContext = pipeline.context = {
-        incrementalRender: incrementalRender,
+        progressiveRender: progressiveRender,
         large: large
     };
 };
@@ -81,6 +132,7 @@ proto.updateStreamModes = function (seriesModel, view) {
 proto.restorePipelines = function (ecModel) {
     var scheduler = this;
     var pipelineMap = scheduler._pipelineMap = createHashMap();
+
     ecModel.eachSeries(function (seriesModel) {
         var progressive = seriesModel.getProgressive();
         var pipelineId = seriesModel.uid;
@@ -101,12 +153,12 @@ proto.restorePipelines = function (ecModel) {
     });
 };
 
-proto.prepareStageTasks = function (stageHandlers, useClearVisual) {
+proto.prepareStageTasks = function () {
     var stageTaskMap = this._stageTaskMap;
     var ecModel = this.ecInstance.getModel();
     var api = this.api;
 
-    each(stageHandlers, function (handler) {
+    each(this._allHandlers, function (handler) {
         var record = stageTaskMap.get(handler.uid) || stageTaskMap.set(handler.uid, []);
 
         handler.reset && createSeriesStageTask(this, handler, record, ecModel, api);
@@ -128,16 +180,16 @@ proto.prepareView = function (view, model, ecModel, api) {
 };
 
 
-proto.performDataProcessorTasks = function (stageHandlers, ecModel, payload) {
+proto.performDataProcessorTasks = function (ecModel, payload) {
     // If we do not use `block` here, it should be considered when to update modes.
-    performStageTasks(this, stageHandlers, ecModel, payload, {block: true});
+    performStageTasks(this, this._dataProcessorHandlers, ecModel, payload, {block: true});
 };
 
 // opt
 // opt.visualType: 'visual' or 'layout'
 // opt.setDirty
-proto.performVisualTasks = function (stageHandlers, ecModel, payload, opt) {
-    performStageTasks(this, stageHandlers, ecModel, payload, opt);
+proto.performVisualTasks = function (ecModel, payload, opt) {
+    performStageTasks(this, this._visualHandlers, ecModel, payload, opt);
 };
 
 function performStageTasks(scheduler, stageHandlers, ecModel, payload, opt) {
@@ -295,7 +347,7 @@ function createOverallStageTask(scheduler, stageHandler, stageHandlerRecord, ecM
     var seriesType = stageHandler.seriesType;
     var getTargetSeries = stageHandler.getTargetSeries;
     var overallProgress = true;
-    var isOverallFilter = stageHandler.isOverallFilter;
+    var modifyOutputEnd = stageHandler.modifyOutputEnd;
 
     // An overall task with seriesType detected or has `getTargetSeries`, we add
     // stub in each pipelines, it will set the overall task dirty when the pipeline
@@ -318,13 +370,19 @@ function createOverallStageTask(scheduler, stageHandler, stageHandlerRecord, ecM
 
     function createStub(seriesModel) {
         var pipelineId = seriesModel.uid;
-        var stub = agentStubMap.get(pipelineId) || agentStubMap.set(pipelineId, createTask(
-            {reset: stubReset, onDirty: stubOnDirty}
-        ));
+        var stub = agentStubMap.get(pipelineId);
+        if (!stub) {
+            stub = agentStubMap.set(pipelineId, createTask(
+                {reset: stubReset, onDirty: stubOnDirty}
+            ));
+            // When the result of `getTargetSeries` changed, the overallTask
+            // should be set as dirty and re-performed.
+            overallTask.dirty();
+        }
         stub.context = {
             model: seriesModel,
             overallProgress: overallProgress,
-            isOverallFilter: isOverallFilter
+            modifyOutputEnd: modifyOutputEnd
         };
         stub.agent = overallTask;
         stub.__block = overallProgress;
@@ -337,6 +395,9 @@ function createOverallStageTask(scheduler, stageHandler, stageHandlerRecord, ecM
     agentStubMap.each(function (stub, pipelineId) {
         if (!pipelineMap.get(pipelineId)) {
             stub.dispose();
+            // When the result of `getTargetSeries` changed, the overallTask
+            // should be set as dirty and re-performed.
+            overallTask.dirty();
             agentStubMap.removeKey(pipelineId);
         }
     });

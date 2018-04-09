@@ -48,12 +48,28 @@ export default SeriesModel.extend({
 
         tree.root.eachNode('preorder', function (node) {
             var item = node.hostTree.data.getRawDataItem(node.dataIndex);
+            // add item.collapsed != null, because users can collapse node original in the series.data.
             node.isExpand = (item && item.collapsed != null)
                 ? !item.collapsed
                 : node.depth <= expandTreeDepth;
         });
 
         return tree.data;
+    },
+    
+    /**
+     * Make the configuration 'orient' backward compatibly, with 'horizontal = LR', 'vertical = TB'.
+     * @returns {string} orient
+     */
+    getOrient: function () {
+        var orient = this.get('orient');
+        if (orient === 'horizontal') {
+            orient = 'LR';
+        }
+        else if (orient === 'vertical') {
+            orient = 'TB';
+        }
+        return orient;
     },
 
     /**
@@ -88,8 +104,9 @@ export default SeriesModel.extend({
         // the layout of the tree, two value can be selected, 'orthogonal' or 'radial'
         layout: 'orthogonal',
 
-        // the orient of orthoginal layout, can be setted to 'horizontal' or 'vertical'
-        orient: 'horizontal',
+        // The orient of orthoginal layout, can be setted to 'LR', 'TB', 'RL', 'BT'.
+        // and the backward compatibility configuration 'horizontal = LR', 'vertical = TB'.
+        orient: 'LR',
 
         symbol: 'emptyCircle',
 

@@ -29,7 +29,6 @@ function getScale(symbolSize) {
  */
 function SymbolClz(data, idx, seriesScope) {
     graphic.Group.call(this);
-
     this.updateData(data, idx, seriesScope);
 }
 
@@ -39,7 +38,13 @@ function driftSymbol(dx, dy) {
     this.parent.drift(dx, dy);
 }
 
-symbolProto._createSymbol = function (symbolType, data, idx, symbolSize) {
+symbolProto._createSymbol = function (
+    symbolType,
+    data,
+    idx,
+    symbolSize,
+    keepAspect
+) {
     // Remove paths created before
     this.removeAll();
 
@@ -52,7 +57,7 @@ symbolProto._createSymbol = function (symbolType, data, idx, symbolSize) {
     // and macOS Sierra, a circle stroke become a rect, no matter what
     // the scale is set. So we set width/height as 2. See #4150.
     var symbolPath = createSymbol(
-        symbolType, -1, -1, 2, 2, color
+        symbolType, -1, -1, 2, 2, color, keepAspect
     );
 
     symbolPath.attr({
@@ -153,7 +158,8 @@ symbolProto.updateData = function (data, idx, seriesScope) {
     var isInit = symbolType !== this._symbolType;
 
     if (isInit) {
-        this._createSymbol(symbolType, data, idx, symbolSize);
+        var keepAspect = data.getItemVisual(idx, 'symbolKeepAspect');
+        this._createSymbol(symbolType, data, idx, symbolSize, keepAspect);
     }
     else {
         var symbolPath = this.childAt(0);
@@ -291,6 +297,11 @@ symbolProto._updateCommon = function (data, idx, symbolSize, seriesScope) {
 
     if (hoverAnimation && seriesModel.isAnimationEnabled()) {
         var onEmphasis = function() {
+            // Do not support this hover animation util some scenario required.
+            // Animation can only be supported in hover layer when using `el.incremetal`.
+            if (this.incremental) {
+                return;
+            }
             var ratio = scale[1] / scale[0];
             this.animateTo({
                 scale: [
@@ -300,6 +311,9 @@ symbolProto._updateCommon = function (data, idx, symbolSize, seriesScope) {
             }, 400, 'elasticOut');
         };
         var onNormal = function() {
+            if (this.incremental) {
+                return;
+            }
             this.animateTo({
                 scale: scale
             }, 400, 'elasticOut');

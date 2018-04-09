@@ -5,10 +5,8 @@ import { concatArray, mergeAll, map } from 'zrender/src/core/util';
 import {encodeHTML} from '../../util/format';
 import CoordinateSystem from '../../CoordinateSystem';
 
-var globalObj = typeof window === 'undefined' ? global : window;
-
-var Uint32Arr = globalObj.Uint32Array || Array;
-var Float64Arr = globalObj.Float64Array || Array;
+var Uint32Arr = typeof Uint32Array === 'undefined' ? Array : Uint32Array;
+var Float64Arr = typeof Float64Array === 'undefined' ? Array : Float64Array;
 
 function compatEc2(seriesOpt) {
     var data = seriesOpt.data;
@@ -44,6 +42,9 @@ var LinesSeries = SeriesModel.extend({
     visualColorAccessPath: 'lineStyle.color',
 
     init: function (option) {
+        // The input data may be null/undefined.
+        option.data = option.data || [];
+
         // Not using preprocessor because mergeOption may not have series.type
         compatEc2(option);
 
@@ -58,6 +59,9 @@ var LinesSeries = SeriesModel.extend({
     },
 
     mergeOption: function (option) {
+        // The input data may be null/undefined.
+        option.data = option.data || [];
+
         compatEc2(option);
 
         if (option.data) {
@@ -284,9 +288,6 @@ var LinesSeries = SeriesModel.extend({
         large: false,
         // Available when large is true
         largeThreshold: 2000,
-
-        incremental: false,
-        incrementalThreshold: 3000,
 
         // If lines are polyline
         // polyline not support curveness, label, animation

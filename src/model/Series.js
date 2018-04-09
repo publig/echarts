@@ -171,7 +171,7 @@ var SeriesModel = ComponentModel.extend({
         // Default data label emphasis `show`
         // FIXME Tree structure data ?
         // FIXME Performance ?
-        if (data) {
+        if (data && !zrUtil.isTypedArray(data)) {
             var props = ['show'];
             for (var i = 0; i < data.length; i++) {
                 if (data[i] && data[i].label) {
@@ -231,7 +231,7 @@ var SeriesModel = ComponentModel.extend({
         if (task) {
             var context = task.context;
             // Consider case: filter, data sample.
-            if (context.data !== data && task.isOverallFilter) {
+            if (context.data !== data && task.modifyOutputEnd) {
                 task.setOutputEnd(data.count());
             }
             context.outputData = data;
@@ -357,8 +357,7 @@ var SeriesModel = ComponentModel.extend({
         var name = data.getName(dataIndex);
 
         var seriesName = this.name;
-        if (seriesName === modelUtil.DEFAULT_COMPONENT_NAME) {
-            // Not show '-'
+        if (!modelUtil.isNameSpecified(this)) {
             seriesName = '';
         }
         seriesName = seriesName
@@ -481,7 +480,7 @@ function autoSeriesName(seriesModel) {
     // User specified name has higher priority, otherwise it may cause
     // series can not be queried unexpectedly.
     var name = seriesModel.name;
-    if (modelUtil.DEFAULT_COMPONENT_NAME === name) {
+    if (!modelUtil.isNameSpecified(seriesModel)) {
         seriesModel.name = getSeriesAutoName(seriesModel) || name;
     }
 }

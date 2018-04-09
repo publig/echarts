@@ -29,7 +29,7 @@ Calendar.prototype = {
 
     // Required in createListFromData
     getDimensionsInfo: function () {
-        return [{name: 'time', type: 'time'}];
+        return [{name: 'time', type: 'time'}, 'value'];
     },
 
     getRangeInfo: function () {
@@ -181,7 +181,10 @@ Calendar.prototype = {
         var date = dayInfo.formatedDate;
 
         // if not in range return [NaN, NaN]
-        if (clamp && !(dayInfo.time >= range.start.time && dayInfo.time <= range.end.time)) {
+        if (clamp && !(
+            dayInfo.time >= range.start.time
+            && dayInfo.time < range.end.time + PROXIMATE_ONE_DAY
+        )) {
             return [NaN, NaN];
         }
 

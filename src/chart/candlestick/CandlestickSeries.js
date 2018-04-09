@@ -55,6 +55,12 @@ var CandlestickSeries = SeriesModel.extend({
         barMinWidth: null,
         barWidth: null,
 
+        large: true,
+        largeThreshold: 600,
+
+        progressive: 5e3,
+        progressiveThreshold: 1e4,
+
         animationUpdate: false,
         animationEasing: 'linear',
         animationDuration: 300
@@ -70,7 +76,7 @@ var CandlestickSeries = SeriesModel.extend({
 
     brushSelector: function (dataIndex, data, selectors) {
         var itemLayout = data.getItemLayout(dataIndex);
-        return selectors.rect(itemLayout.brushRect);
+        return itemLayout && selectors.rect(itemLayout.brushRect);
     }
 
 });

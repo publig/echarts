@@ -25,14 +25,16 @@ var samplers = {
         for (var i = 0; i < frame.length; i++) {
             frame[i] > max && (max = frame[i]);
         }
-        return max;
+        // NaN will cause illegal axis extent.
+        return isFinite(max) ? max : NaN;
     },
     min: function (frame) {
         var min = Infinity;
         for (var i = 0; i < frame.length; i++) {
             frame[i] < min && (min = frame[i]);
         }
-        return min;
+        // NaN will cause illegal axis extent.
+        return isFinite(min) ? min : NaN;
     },
     // TODO
     // Median
@@ -47,7 +49,11 @@ var indexSampler = function (frame, value) {
 
 export default function (seriesType) {
     return {
+
         seriesType: seriesType,
+
+        modifyOutputEnd: true,
+
         reset: function (seriesModel, ecModel, api) {
             var data = seriesModel.getData();
             var sampling = seriesModel.get('sampling');
@@ -69,8 +75,9 @@ export default function (seriesType) {
                         sampler = sampling;
                     }
                     if (sampler) {
+                        // Only support sample the first dim mapped from value axis.
                         seriesModel.setData(data.downSample(
-                            valueAxis.dim, 1 / rate, sampler, indexSampler
+                            data.mapDimension(valueAxis.dim), 1 / rate, sampler, indexSampler
                         ));
                     }
                 }
